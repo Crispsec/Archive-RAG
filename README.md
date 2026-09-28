@@ -1,4 +1,6 @@
-# Archive MCP
+# Archive RAG
+
+> **Proof of concept.** Built to explore source-grounded question answering over archival records. It runs on three illustrative example documents and is not production-ready; see [Current limitations](#current-limitations).
 
 A historical archives search and RAG (Retrieval-Augmented Generation) tool. Users can search digitised historical documents and ask natural-language questions answered by an LLM grounded in the archive content. Every answer comes with the source records it was based on, so you can check the answer against the documents themselves.
 
@@ -12,27 +14,42 @@ A historical archives search and RAG (Retrieval-Augmented Generation) tool. User
 
 ## What it does
 
-- **Ask in Dutch or English.** The question is embedded, the closest archive records are retrieved, and the LLM answers from the retrieved text. The embedding model is multilingual, so a Dutch question finds English records; in the screenshot the model also answered in Dutch, though the prompt doesn't require it.
+- **Ask in Dutch or English.** The question is embedded, the closest archive records are retrieved, and the LLM answers from their excerpts. The embedding model is multilingual, so a Dutch question finds English records; in the screenshot the model also answered in Dutch, though the prompt doesn't require it.
 - **See where the answer came from.** The UI lists every source record used for the answer, with its date, creator, collection and persistent handle.
 - **Check the original.** Each record opens its full transcription, and "View original scan" opens the IIIF manifest in the Universal Viewer.
 - **Stay inside the sources.** The system prompt tells the model not to use outside knowledge, and to say so when the retrieved documents don't contain the answer. This is an instruction to the model, not a guarantee.
 
 ## How it works
 
+**Ingest (once, and whenever the data changes)**
+
 ```mermaid
 flowchart LR
-    U[User question] --> F[React frontend]
-    F -->|POST /mcp/ask| B[FastAPI backend]
-    B -->|embed question| E[Embedding model]
-    B -->|top 3 by similarity| Q[(Qdrant<br/>archive_docs)]
-    Q --> B
-    B -->|question + retrieved text| L[LLM]
-    L -->|streamed answer| F
-    B -->|source metadata| F
+    J[JSON records<br/>archive_mcp/data/] --> I[qdrant_ingest.py]
+    I -->|embed the excerpt| E[Embedding model]
+    E --> I
+    I -->|vector + full record as payload| Q[(Qdrant<br/>archive_docs)]
+```
+
+**Question → answer**
+
+```mermaid
+flowchart LR
+    U[User] --> F[React frontend]
+    F -->|POST /mcp/ask| A["/mcp/ask"]
+    A -->|HTTP POST| S["/mcp/search"]
+    S -->|embed the question| E[Embedding model]
+    S -->|top 3 by similarity| Q[(Qdrant)]
+    S -->|3 records| A
+    A -->|question + the 3 excerpts| L[LLM]
+    L -->|answer tokens| A
+    A -->|one stream: answer, then marker + records| F
     F -->|View original scan| V[IIIF Universal Viewer]
 ```
 
-`/mcp/ask` streams the answer text first. Once the answer is complete, it appends the source metadata after a `$$DOCS_METADATA$$` marker, and the frontend splits the stream at that marker into the answer panel and the source list.
+Both endpoints live in the same FastAPI backend; `/mcp/ask` calls `/mcp/search` over HTTP. Only each record's `excerpt` is embedded and passed to the LLM. The `full_text` is stored in Qdrant and shown in the UI when you open a record, but the model never sees it.
+
+`/mcp/ask` returns a single plain-text stream: the answer first, then a `$$DOCS_METADATA$$` marker followed by the retrieved records as JSON. The frontend splits the stream at that marker into the answer panel and the source list.
 
 A source record as returned by `/mcp/search`:
 
@@ -55,6 +72,7 @@ A source record as returned by `/mcp/search`:
 ## Current limitations
 
 - **Citations are per answer, not per sentence.** The UI shows which records were retrieved, but the answer text has no inline markers, so you can't tell which sentence came from which record.
+- **Not an MCP server.** Despite the `/mcp/` paths and `mcp_manifest.yaml`, the backend is a plain REST API and doesn't implement the Model Context Protocol. The manifest also lists a `/mcp/getDocument` endpoint that doesn't exist.
 - **Only 3 records are retrieved.** The limit is fixed in `/mcp/search`.
 - **The example data is illustrative.** The three records in `archive_mcp/data/` are short placeholder texts written for the demo. They all point to the same IISG handle and IIIF manifest.
 - **Ingest takes JSON, not PDFs.** Documents must already be transcribed into the JSON format below.
@@ -66,7 +84,7 @@ A source record as returned by `/mcp/search`:
 
 | Component | Description |
 |-----------|-------------|
-| `archive_mcp/` | FastAPI backend — MCP server exposing `/mcp/search` and `/mcp/ask` |
+| `archive_mcp/` | FastAPI backend (plain REST) exposing `/mcp/search` and `/mcp/ask` |
 | `archive-frontend/` | React frontend UI |
 | Qdrant | Vector database storing document embeddings |
 | External LLM API | willma.surf.nl — used for both embeddings and chat completions |
