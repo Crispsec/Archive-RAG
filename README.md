@@ -187,3 +187,7 @@ Qdrant data is persisted in a Docker volume (`qdrant_storage`) and survives rest
 ```bash
 docker compose down -v
 ```
+
+## AI assistance
+
+Built with AI assistance (mainly Gemini, plus other providers). The idea and the architecture are mine; the AI tools contributed code for the frontend and backend. Claude helped draft this README.
