@@ -83,6 +83,12 @@ A source record as returned by `/mcp/search`:
 - **Markdown in answers isn't rendered.** If the model uses bold, the `**` shows up as literal characters.
 - **Not fully local.** Embeddings and chat completions go through an external OpenAI-compatible API (SURF's willma). Any OpenAI-compatible endpoint, including a local one, can be set in `.env`.
 
+## Retrieval scope
+
+Retrieval here is deliberately basic: a single dense-vector search in Qdrant over one short excerpt per record. That is enough to demonstrate the flow from question to answer to checkable source, but not to show retrieval quality.
+
+For a real collection, the retrieval approach would be chosen separately, based on the documents and an evaluation of retrieval quality on them. Options range from RAG-style retrieval (dense, sparse or hybrid) to approaches such as PageIndex-style document navigation or agentic retrieval.
+
 ## Architecture
 
 | Component | Description |
