@@ -1,0 +1,26 @@
+mcp:
+  name: "historical-archives"
+  description: "Conversational access to digitized historical documents (IIIF + OCR)"
+  version: "1.0"
+  capabilities:
+    - search
+    - getDocument
+  endpoints:
+    search:
+      url: "/mcp/search"
+      method: "POST"
+      input_schema:
+        type: object
+        properties:
+          query:
+            type: string
+            description: "Search query"
+    getDocument:
+      url: "/mcp/getDocument"
+      method: "GET"
+      input_schema:
+        type: object
+        properties:
+          id:
+            type: string
+            description: "Document ID"
