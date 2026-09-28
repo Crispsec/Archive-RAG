@@ -39,7 +39,9 @@ flowchart LR
     F -->|POST /mcp/ask| A["/mcp/ask"]
     A -->|HTTP POST| S["/mcp/search"]
     S -->|embed the question| E[Embedding model]
-    S -->|top 3 by similarity| Q[(Qdrant)]
+    E -->|query vector| S
+    S -->|query vector, limit 3| Q[(Qdrant)]
+    Q -->|3 nearest hits + payload:<br/>title, excerpt, full_text, handle, …| S
     S -->|3 records| A
     A -->|question + the 3 excerpts| L[LLM]
     L -->|answer tokens| A
@@ -47,7 +49,7 @@ flowchart LR
     F -->|View original scan| V[IIIF Universal Viewer]
 ```
 
-Both endpoints live in the same FastAPI backend; `/mcp/ask` calls `/mcp/search` over HTTP. Only each record's `excerpt` is embedded and passed to the LLM. The `full_text` is stored in Qdrant and shown in the UI when you open a record, but the model never sees it.
+Both endpoints live in the same FastAPI backend; `/mcp/ask` calls `/mcp/search` over HTTP. Only each record's `excerpt` is embedded and passed to the LLM. The `full_text` is stored in Qdrant and shown in the UI when you open a record, but the model never sees it. Everything the UI shows about a source (title, metadata, transcription, scan link) comes from the Qdrant payload, passed through `/mcp/search` and `/mcp/ask` in that one stream.
 
 `/mcp/ask` returns a single plain-text stream: the answer first, then a `$$DOCS_METADATA$$` marker followed by the retrieved records as JSON. The frontend splits the stream at that marker into the answer panel and the source list.
 
@@ -73,7 +75,8 @@ A source record as returned by `/mcp/search`:
 
 - **Citations are per answer, not per sentence.** The UI shows which records were retrieved, but the answer text has no inline markers, so you can't tell which sentence came from which record.
 - **Not an MCP server.** Despite the `/mcp/` paths and `mcp_manifest.yaml`, the backend is a plain REST API and doesn't implement the Model Context Protocol. The manifest also lists a `/mcp/getDocument` endpoint that doesn't exist.
-- **Only 3 records are retrieved.** The limit is fixed in `/mcp/search`.
+- **Only 3 records are retrieved.** `/mcp/search` asks Qdrant for the 3 nearest hits (`limit=3`, hard-coded).
+- **The demo doesn't exercise retrieval.** With only 3 example records in Qdrant, every question gets all 3 back, just in a different order. It shows the pipeline, not how well retrieval picks the right documents.
 - **The example data is illustrative.** The three records in `archive_mcp/data/` are short placeholder texts written for the demo. They all point to the same IISG handle and IIIF manifest.
 - **Ingest takes JSON, not PDFs.** Documents must already be transcribed into the JSON format below.
 - **The embedded scan viewer link is currently broken.** The IISG Universal Viewer path used for `viewer_url` returns 404; the IIIF manifests themselves still resolve.
